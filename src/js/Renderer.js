@@ -17,6 +17,8 @@ export class Renderer {
         // Mobile Safe Areas
         this.safeAreaTop = 0;
         this.safeAreaBottom = 0;
+        this.safeAreaLeft = 0;
+        this.safeAreaRight = 0;
         this.updateSafeAreas();
         window.addEventListener('resize', () => {
             this.resize();
@@ -37,10 +39,11 @@ export class Renderer {
     }
 
     updateSafeAreas() {
-        // Simple way to get CSS env(safe-area-inset-top) in JS
         const div = document.createElement('div');
         div.style.paddingTop = 'env(safe-area-inset-top)';
         div.style.paddingBottom = 'env(safe-area-inset-bottom)';
+        div.style.paddingLeft = 'env(safe-area-inset-left)';
+        div.style.paddingRight = 'env(safe-area-inset-right)';
         div.style.position = 'absolute';
         div.style.visibility = 'hidden';
         document.body.appendChild(div);
@@ -48,13 +51,32 @@ export class Renderer {
         const style = window.getComputedStyle(div);
         this.safeAreaTop = parseInt(style.paddingTop) || 0;
         this.safeAreaBottom = parseInt(style.paddingBottom) || 0;
+        this.safeAreaLeft = parseInt(style.paddingLeft) || 0;
+        this.safeAreaRight = parseInt(style.paddingRight) || 0;
 
-        // Fallback for some browsers/simulators where env might not be ready
-        if (this.safeAreaTop === 0 && /iPhone|iPad/i.test(navigator.userAgent)) {
-            this.safeAreaTop = 44; // Standard iOS status bar/notch buffer
+        // Fallback Logic for Simulators/Browsers
+        if (/iPhone|iPad/i.test(navigator.userAgent)) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+
+            // If env variables failed to return values but we know we are on iOS
+            if (this.safeAreaTop === 0 && this.safeAreaBottom === 0 && this.safeAreaLeft === 0 && this.safeAreaRight === 0) {
+                if (isLandscape) {
+                    this.safeAreaLeft = 47;
+                    this.safeAreaRight = 47;
+                    this.safeAreaBottom = 21;
+                } else {
+                    this.safeAreaTop = 47;
+                    this.safeAreaBottom = 34;
+                }
+            }
         }
 
         document.body.removeChild(div);
+    }
+
+    getSafeCenter() {
+        const safeWidth = this.canvas.width - this.safeAreaLeft - this.safeAreaRight;
+        return this.safeAreaLeft + (safeWidth / 2);
     }
 
     resize() {
@@ -142,7 +164,7 @@ export class Renderer {
         this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         this.ctx.font = '20px "Press Start 2P"';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText("TYPING TURTLE", this.canvas.width / 2, y + height / 2 + 10);
+        this.ctx.fillText("TYPING TURTLE", this.getSafeCenter(), y + height / 2 + 10);
         this.ctx.textAlign = 'left'; // Reset
     }
 
@@ -164,36 +186,47 @@ export class Renderer {
     }
 
     drawHUD(score, hearts, level) {
-        const hudY = this.safeAreaTop;
-        const hudHeight = 35; // Thinner banner as requested
+        // In landscape, top safe area is 0, so we use a small floor (10px).
+        // In portrait, this will use the actual notch height (e.g., 47px).
+        const hudY = Math.max(this.safeAreaTop, 10);
+        const hudHeight = 35;
 
-        // Top Banner Background
-        this.ctx.fillStyle = this.colors.yellow;
+        // Top Banner Background - Stretch from screen edge to screen edge
+        this.ctx.fillStyle = this.colors.gold;
         this.ctx.fillRect(0, 0, this.canvas.width, hudY + hudHeight);
 
-        this.ctx.font = '20px "Press Start 2P"';
+        const isPortrait = this.canvas.height > this.canvas.width;
+        const hudFontSize = isPortrait ? 14 : 20;
+        this.ctx.font = `${hudFontSize}px "Press Start 2P"`;
         this.ctx.fillStyle = '#000000';
         this.ctx.textBaseline = 'middle';
-        this.ctx.textAlign = 'left';
 
-        // Layout
+        // Layout - Respect left/right safe areas for the side notches
         const textY = hudY + (hudHeight / 2);
-        this.ctx.fillText(`SCORE: ${score}`, 20, textY);
-        this.ctx.fillText(`LVL: ${level}`, 250, textY);
+        const marginX = 20;
+        const safeCenterX = this.getSafeCenter();
+
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText(`SCORE: ${score}`, marginX + this.safeAreaLeft, textY);
+
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`LVL: ${level}`, safeCenterX, textY);
 
         this.ctx.textAlign = 'right';
         this.ctx.fillStyle = this.colors.red;
         // Hide some hearts if too many for mobile width
         const heartCount = hearts > 5 ? 5 : hearts;
-        this.ctx.fillText(`❤`.repeat(heartCount), this.canvas.width - 20, textY);
+        this.ctx.fillText(`❤`.repeat(heartCount), this.canvas.width - marginX - this.safeAreaRight, textY);
 
         // DEBUG STATE
         this.ctx.textAlign = 'center';
         this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
         this.ctx.font = '8px monospace';
-        if (Config.DEBUG) {
-            this.ctx.fillText(`STATE: ${this.lastState || 'Unknown'}`, this.canvas.width / 2, hudY + hudHeight - 2);
-        }
+        import('./Config.js').then(({ Config }) => {
+            if (Config.DEBUG) {
+                this.ctx.fillText(`STATE: ${this.lastState || 'Unknown'}`, safeCenterX, hudY + hudHeight - 2);
+            }
+        });
 
         // Reset
         this.ctx.textBaseline = 'alphabetic';
@@ -204,7 +237,7 @@ export class Renderer {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        const centerX = this.canvas.width / 2;
+        const safeCenterX = this.getSafeCenter();
         const centerY = this.canvas.height / 2;
 
         // Adaptive Logo Size: Cap by width and available height
@@ -212,7 +245,7 @@ export class Renderer {
 
         // Big Logo
         if (this.turtleImage.complete && this.turtleImage.naturalWidth > 0) {
-            const x = centerX - logoSize / 2;
+            const x = safeCenterX - logoSize / 2;
             const y = centerY - logoSize - 20; // Anchor above middle with small gap
             this.ctx.drawImage(this.turtleImage, x, y, logoSize, logoSize);
         }
@@ -221,39 +254,58 @@ export class Renderer {
         const titleFontSize = Math.min(this.canvas.width / 10, 60);
         this.ctx.font = `${titleFontSize}px "Bungee Shade"`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('TYPING TURTLE', centerX, centerY + 60);
+        this.ctx.fillText('TYPING TURTLE', safeCenterX, centerY + 60);
 
         this.ctx.font = '20px "Press Start 2P"';
         this.ctx.fillStyle = this.colors.aqua;
         if (Math.floor(Date.now() / 500) % 2 === 0) {
-            this.ctx.fillText('Tap to Start', centerX, centerY + 140);
+            this.ctx.fillText('Tap to Start', safeCenterX, centerY + 140);
         }
 
         this.ctx.font = '14px "Press Start 2P"';
         this.ctx.fillStyle = '#ddd';
-        this.ctx.fillText('Connect a physical keyboard', centerX, this.canvas.height - 100);
-        this.ctx.fillText('or tap to type', centerX, this.canvas.height - 80);
+        this.ctx.fillText('Connect a physical keyboard', safeCenterX, this.canvas.height - 100 - this.safeAreaBottom);
+        this.ctx.fillText('or tap to type', safeCenterX, this.canvas.height - 80 - this.safeAreaBottom);
     }
 
     drawEnterName(score, name) {
         this.ctx.fillStyle = 'rgba(0,0,0,0.95)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+        const safeCenterX = this.getSafeCenter();
+        const centerY = this.canvas.height / 2;
+        const isPortrait = this.canvas.height > this.canvas.width;
+
         this.ctx.fillStyle = '#39ff14';
-        this.ctx.font = '50px "Bungee Shade"';
+        const titleSize = isPortrait ? Math.min(this.canvas.width / 12, 40) : 50;
+        this.ctx.font = `${titleSize}px "Bungee Shade"`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('NEW HIGH SCORE!', this.canvas.width / 2, this.canvas.height / 2 - 100);
+
+        const topOffset = Math.max(this.safeAreaTop + 40, centerY - 100);
+        this.ctx.fillText('NEW HIGH SCORE!', safeCenterX, topOffset);
 
         this.ctx.fillStyle = '#00ffff';
         this.ctx.font = '40px "VT323"';
-        this.ctx.fillText(`Score: ${score}`, this.canvas.width / 2, this.canvas.height / 2 - 40);
+        this.ctx.fillText(`Score: ${score}`, safeCenterX, topOffset + 60);
+
+        // Dynamic font scaling for name entry line
+        const fullPrompt = `Enter Name: ${name}_`;
+        const testPromptMax = `Enter Name: WWWWWWWWWW_`; // Max potential width with large characters
+        const safeWidth = this.canvas.width - this.safeAreaLeft - this.safeAreaRight - 40;
+
+        let fontSize = 40;
+        this.ctx.font = `${fontSize}px "VT323"`;
+        while (this.ctx.measureText(testPromptMax).width > safeWidth && fontSize > 16) {
+            fontSize--;
+            this.ctx.font = `${fontSize}px "VT323"`;
+        }
 
         this.ctx.fillStyle = '#ff00ff';
-        this.ctx.fillText(`Enter Name: ${name}_`, this.canvas.width / 2, this.canvas.height / 2 + 40);
+        this.ctx.fillText(fullPrompt, safeCenterX, topOffset + 140);
 
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '20px "VT323"';
-        this.ctx.fillText('Press ENTER to Submit', this.canvas.width / 2, this.canvas.height / 2 + 100);
+        this.ctx.fillText('Press ENTER to Submit', safeCenterX, topOffset + 200);
     }
 
     drawSettings(difficulty, soundEnabled, layout) {
@@ -261,14 +313,14 @@ export class Renderer {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         const padding = 25;
-        const centerX = this.canvas.width / 2;
+        const safeCenterX = this.getSafeCenter();
         const top = this.safeAreaTop + padding;
 
         this.ctx.textAlign = 'center';
         this.ctx.fillStyle = this.colors.green;
         const titleSize = Math.min(this.canvas.width / 10, 50);
         this.ctx.font = `${titleSize}px "Bungee Shade"`;
-        this.ctx.fillText('SETTINGS', centerX, top + 50);
+        this.ctx.fillText('SETTINGS', safeCenterX, top + 50);
 
         // Responsive font for menu items
         const menuFontSize = Math.min(this.canvas.width / 20, 24);
@@ -280,24 +332,24 @@ export class Renderer {
         // Difficulty Options
         this.ctx.fillStyle = '#fff';
         this.ctx.font = `${menuFontSize * 0.8}px "Press Start 2P"`;
-        this.ctx.fillText('CHOOSE DIFFICULTY:', centerX, startY - 40);
+        this.ctx.fillText('CHOOSE DIFFICULTY:', safeCenterX, startY - 40);
 
         this.ctx.font = `${menuFontSize}px "Press Start 2P"`;
         const difficulties = ['EASY', 'MEDIUM', 'HARD'];
         difficulties.forEach((diff, idx) => {
             this.ctx.fillStyle = difficulty === diff ? this.colors.yellow : '#888';
-            this.ctx.fillText(`${idx + 1}. ${diff}`, centerX, startY + (idx * gap));
+            this.ctx.fillText(`${idx + 1}. ${diff}`, safeCenterX, startY + (idx * gap));
         });
 
         // Sound Toggle
         const soundY = startY + (difficulties.length * gap) + padding;
         this.ctx.fillStyle = soundEnabled ? this.colors.yellow : this.colors.red;
-        this.ctx.fillText(`M. AUDIO: ${soundEnabled ? 'ON 🔊' : 'OFF 🔇'}`, centerX, soundY);
+        this.ctx.fillText(`M. AUDIO: ${soundEnabled ? 'ON 🔊' : 'OFF 🔇'}`, safeCenterX, soundY);
 
         // Return Prompt
         this.ctx.fillStyle = this.colors.aqua;
         this.ctx.font = '14px "Press Start 2P"';
-        this.ctx.fillText('Tap to Return', centerX, this.canvas.height - 40 - this.safeAreaBottom);
+        this.ctx.fillText('Tap to Return', safeCenterX, this.canvas.height - 40 - this.safeAreaBottom);
 
         this.ctx.textAlign = 'start';
     }
@@ -306,27 +358,29 @@ export class Renderer {
         this.ctx.fillStyle = 'rgba(0,0,0,0.9)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        const centerX = this.canvas.width / 2;
-        const top = this.safeAreaTop + 20;
+        const safeCenterX = this.getSafeCenter();
+        const isPortrait = this.canvas.height > this.canvas.width;
+        // Increase margin in portrait for the notch
+        const top = this.safeAreaTop + (isPortrait ? 40 : 20);
 
-        // Header - More compact
+        // Header - More compact and orientation-aware scaling
         this.ctx.fillStyle = this.colors.red;
-        const titleSize = Math.min(this.canvas.width / 10, 50);
+        const titleSize = isPortrait ? Math.min(this.canvas.width / 12, 45) : Math.min(this.canvas.width / 10, 50);
         this.ctx.font = `${titleSize}px "Bungee Shade"`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('GAME OVER', centerX, top + 40);
+        this.ctx.fillText('GAME OVER', safeCenterX, top + 40);
 
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '24px "VT323"';
-        this.ctx.fillText(`SCORE: ${score}`, centerX, top + 75);
+        this.ctx.fillText(`SCORE: ${score}`, safeCenterX, top + 75);
 
         // Draw Leaderboard Table
         if (maxScores && maxScores.length > 0) {
             this.ctx.fillStyle = this.colors.yellow;
             this.ctx.font = '20px "Press Start 2P"';
-            this.ctx.fillText('TOP SCORES', centerX, top + 115);
+            this.ctx.fillText('TOP SCORES', safeCenterX, top + 115);
 
-            const tableWidth = Math.min(this.canvas.width * 0.9, 600);
+            const tableWidth = Math.min(this.canvas.width * 0.9 - (this.safeAreaLeft + this.safeAreaRight), 600);
             const halfTable = tableWidth / 2;
             const startY = top + 160;
             const rowHeight = Math.min(this.canvas.height / 25, 30);
@@ -335,17 +389,17 @@ export class Renderer {
             this.ctx.font = 'bold 16px "VT323"';
             this.ctx.fillStyle = '#00ffff';
             this.ctx.textAlign = 'left';
-            this.ctx.fillText('NAME', centerX - halfTable, startY - 20);
+            this.ctx.fillText('NAME', safeCenterX - halfTable, startY - 20);
             this.ctx.textAlign = 'center';
-            this.ctx.fillText('SCORE', centerX, startY - 20);
+            this.ctx.fillText('SCORE', safeCenterX, startY - 20);
             this.ctx.textAlign = 'right';
-            this.ctx.fillText('DATE', centerX + halfTable, startY - 20);
+            this.ctx.fillText('DATE', safeCenterX + halfTable, startY - 20);
 
             // Divider
             this.ctx.strokeStyle = 'rgba(255,255,255,0.3)';
             this.ctx.beginPath();
-            this.ctx.moveTo(centerX - halfTable, startY - 10);
-            this.ctx.lineTo(centerX + halfTable, startY - 10);
+            this.ctx.moveTo(safeCenterX - halfTable, startY - 10);
+            this.ctx.lineTo(safeCenterX + halfTable, startY - 10);
             this.ctx.stroke();
 
             this.ctx.font = '18px "VT323"';
@@ -358,13 +412,13 @@ export class Renderer {
                 this.ctx.textAlign = 'left';
                 let name = entry.name;
                 if (name.length > 8 && tableWidth < 400) name = name.substring(0, 7) + "..";
-                this.ctx.fillText(`${idx + 1}. ${name}`, centerX - halfTable, y);
+                this.ctx.fillText(`${idx + 1}. ${name}`, safeCenterX - halfTable, y);
 
                 this.ctx.textAlign = 'center';
-                this.ctx.fillText(`${entry.score}`, centerX, y);
+                this.ctx.fillText(`${entry.score}`, safeCenterX, y);
 
                 this.ctx.textAlign = 'right';
-                this.ctx.fillText(dateStr, centerX + halfTable, y);
+                this.ctx.fillText(dateStr, safeCenterX + halfTable, y);
             });
             this.ctx.textAlign = 'center'; // Reset
         }
@@ -373,7 +427,7 @@ export class Renderer {
         this.ctx.font = '16px "Press Start 2P"';
         this.ctx.fillStyle = '#00ffff';
         if (Math.floor(Date.now() / 500) % 2 === 0) {
-            this.ctx.fillText('Tap to Restart', centerX, this.canvas.height - 40 - this.safeAreaBottom);
+            this.ctx.fillText('Tap to Restart', safeCenterX, this.canvas.height - 40 - this.safeAreaBottom);
         }
     }
 
@@ -415,26 +469,36 @@ export class Renderer {
         this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+        const safeCenterX = this.getSafeCenter();
+        const centerY = this.canvas.height / 2;
+        const isPortrait = this.canvas.height > this.canvas.width;
+
         // Draw Turtle
         this.drawTurtle(0, 'LEVEL_SUMMARY', false);
 
         this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = '50px "Bungee Shade"';
+        const titleSize = isPortrait ? Math.min(this.canvas.width / 12, 40) : 50;
+        this.ctx.font = `${titleSize}px "Bungee Shade"`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(`LEVEL ${level} COMPLETE`, this.canvas.width / 2, this.canvas.height / 2 - 100);
+
+        const topOffset = Math.max(this.safeAreaTop + 40, centerY - 100);
+        this.ctx.fillText(`LEVEL ${level} COMPLETE`, safeCenterX, topOffset);
 
         this.ctx.fillStyle = '#fff';
-        this.ctx.font = '24px "Press Start 2P"';
+        const bodyFontSize = isPortrait ? 14 : 18;
+        this.ctx.font = `${bodyFontSize}px "Press Start 2P"`;
 
         const total = stats.caught + stats.missed;
         const accuracy = total > 0 ? Math.round((stats.caught / total) * 100) : 0;
 
-        this.ctx.fillText(`Letters Caught: ${stats.caught}`, this.canvas.width / 2, this.canvas.height / 2 - 20);
-        this.ctx.fillText(`Missed: ${stats.missed}`, this.canvas.width / 2, this.canvas.height / 2 + 20);
-        this.ctx.fillText(`Accuracy: ${accuracy}%`, this.canvas.width / 2, this.canvas.height / 2 + 60);
+        this.ctx.fillText(`Letters Caught: ${stats.caught}`, safeCenterX, topOffset + 80);
+        this.ctx.fillText(`Missed: ${stats.missed}`, safeCenterX, topOffset + 120);
+        this.ctx.fillText(`Accuracy: ${accuracy}%`, safeCenterX, topOffset + 160);
 
         this.ctx.fillStyle = '#00ffff';
-        this.ctx.fillText('Press SPACE for Next Level', this.canvas.width / 2, this.canvas.height / 2 + 120);
+        const promptFontSize = isPortrait ? 12 : 14;
+        this.ctx.font = `${promptFontSize}px "Press Start 2P"`;
+        this.ctx.fillText('Tap or SPACE for Next Level', safeCenterX, topOffset + 220);
     }
 
     drawDebug(state, input) {
