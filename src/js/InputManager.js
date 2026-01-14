@@ -20,28 +20,6 @@ export class InputManager {
 
         this.handleKeyDown = this.handleKeyDown.bind(this);
         window.addEventListener('keydown', this.handleKeyDown);
-
-        // Mobile support
-        this.mobileInput = document.getElementById('mobile-input');
-        if (this.mobileInput) {
-            this.mobileInput.addEventListener('input', (e) => {
-                const val = e.target.value;
-                if (val.length > 0) {
-                    const char = val[val.length - 1];
-                    this.game.handleInput(this.getCharFromKey(char));
-                    e.target.value = ''; // Clear for next char
-                }
-            });
-            // Handle backspace on mobile which might not trigger keydown reliably
-            this.mobileInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Backspace') {
-                    this.game.handleInput('BACKSPACE');
-                }
-            });
-            // Focus on any tap
-            window.addEventListener('touchstart', () => this.mobileInput.focus());
-            window.addEventListener('click', () => this.mobileInput.focus());
-        }
     }
 
     setLayout(layoutName) {
@@ -71,7 +49,7 @@ export class InputManager {
         // Special keys whitelist
         if (key === 'Enter') return 'ENTER';
         if (key === 'Backspace') return 'BACKSPACE';
-        if (key === 'Escape') return 'ESCAPE';
+	if (key === 'Escape') return 'ESCAPE';
         if (key === ' ' || key === 'Spacebar' || key === 'Space') return ' ';
 
         // Ignore other non-character keys (Shift, Ctrl, F1, etc.)
