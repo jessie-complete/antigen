@@ -1,6 +1,7 @@
 export class AudioManager {
     constructor() {
-        this.musicEnabled = false;
+        this.initialMusicEnabled = false;
+        this.musicEnabled = true;
         this.bgm = new Audio();
         this.bgm.loop = true;
         this.bgm.volume = 0.5;
@@ -46,10 +47,14 @@ export class AudioManager {
     }
 
     playMusic() {
-        if (!this.musicEnabled) {
-            this.musicEnabled = true;
+        if (!this.initialMusicEnabled) {
+            this.initialMusicEnabled = true;
             this.bgm.play().catch(e => console.log("Audio play failed:", e));
-        }
+        } else {
+		if (this.musicEnabled) {
+            	this.bgm.play().catch(e => console.log("Audio play failed:", e));
+		}
+	}
     }
 
     stopMusic() {
