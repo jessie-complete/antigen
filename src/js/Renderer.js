@@ -191,21 +191,33 @@ export class Renderer {
         this.ctx.fillRect(0, 0, this.canvas.width, hudY + hudHeight);
 
         const isPortrait = this.canvas.height > this.canvas.width;
-        const hudFontSize = isPortrait ? 14 : 20;
+        // Responsive font for HUD to prevent overlap in portrait
+        let hudFontSize = isPortrait ? 14 : 20;
+
+        // Extra squeeze for high scores in portrait
+        if (isPortrait && score >= 1000) {
+            hudFontSize = 12;
+        }
+        if (isPortrait && score >= 10000) {
+            hudFontSize = 11;
+        }
+
         this.ctx.font = `${hudFontSize}px "Press Start 2P"`;
         this.ctx.fillStyle = '#000000';
         this.ctx.textBaseline = 'middle';
 
         // Layout - Respect left/right safe areas for the side notches
         const textY = hudY + (hudHeight / 2);
-        const marginX = 20;
+        const marginX = isPortrait ? 8 : 20; // Slightly tighter margin in portrait
         const safeCenterX = this.getSafeCenter();
 
         this.ctx.textAlign = 'left';
         this.ctx.fillText(`SCORE: ${score}`, marginX + this.safeAreaLeft, textY);
 
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(`LVL: ${level}`, safeCenterX, textY);
+        // Shift LVL slightly right in portrait if score is very long to prevent overlap
+        const lvlX = (isPortrait && score >= 10000) ? safeCenterX + 10 : safeCenterX;
+        this.ctx.fillText(`LVL: ${level}`, lvlX, textY);
 
         this.ctx.textAlign = 'right';
         this.ctx.fillStyle = this.colors.red;
@@ -429,7 +441,7 @@ export class Renderer {
     drawTurtle(dt, state, isFalling) {
         // Simple Turtle Visualization (Placeholder for Sprite)
         let x = 60;
-        const hudY = this.safeAreaTop;
+        const hudY = this.safeAreaTop + 10;
         const hudHeight = 35;
         let y = hudY + hudHeight + 45; // Dynamically positioned below the banner
 
