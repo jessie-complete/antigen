@@ -78,6 +78,11 @@ export class Game {
         if (this.state === 'PLAYING') {
             this.levelManager.update(dt);
             this.entityManager.update(dt);
+
+            // Wait for flash animation to finish before death transition
+            if (this.hearts <= 0 && !this.renderer.isFlashing) {
+                this.startFalling();
+            }
         } else if (this.state === 'FALLING') {
             // Animate turtle falling
             this.turtleY += 500 * dt; // Fall speed
@@ -228,7 +233,7 @@ export class Game {
         this.renderer.triggerDamageFlash();
         if (this.hearts <= 0) {
             this.audioManager.playSFX('lose');
-            this.startFalling();
+            // Transition to falling is handled in update() after flash completes
         }
     }
 

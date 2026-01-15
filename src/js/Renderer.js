@@ -116,11 +116,6 @@ export class Renderer {
 
         // Draw background grid or effects if needed
 
-        // Dynamic Landscape (Bottom 10%) - Hide in Menu/Settings
-        if (state !== 'MENU' && state !== 'SETTINGS') {
-            this.drawLandscape(state === 'PLAYING' || state === 'LEVEL_SUMMARY' ? 1 : 0);
-        }
-
         // Damage Flash Effect
         if (this.isFlashing && this.flashCount % 2 !== 0) {
             this.ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
@@ -464,17 +459,12 @@ export class Renderer {
     }
 
     drawLevelSummary(stats, level) {
-        this.drawLandscape(level);
-
         this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         const safeCenterX = this.getSafeCenter();
         const centerY = this.canvas.height / 2;
         const isPortrait = this.canvas.height > this.canvas.width;
-
-        // Draw Turtle
-        this.drawTurtle(0, 'LEVEL_SUMMARY', false);
 
         this.ctx.fillStyle = '#FFD700';
         const titleSize = isPortrait ? Math.min(this.canvas.width / 12, 40) : 50;
